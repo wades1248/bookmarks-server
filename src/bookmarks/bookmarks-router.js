@@ -7,6 +7,7 @@ const xss = require('xss')
 const bookmarksRouter = express.Router()
 const bodyParser = express.json()
 const { isWebUri } = require('valid-url')
+const path = require('path')
 
 const serializeBookmark = bookmark =>(
     {
@@ -19,7 +20,7 @@ const serializeBookmark = bookmark =>(
 )
 
 bookmarksRouter
-    .route('/bookmarks')
+    .route('/')
     .get((req, res, next) => {
         BookmarksService.getAllBookmarks(req.app.get('db'))
             .then(bookmarks => {
@@ -82,7 +83,7 @@ bookmarksRouter
         .then(bookmark => {
             res
                 .status(201)
-                .location(`/bookmarks/${bookmark.id}`)
+                .location(path.posix.join(req.originalUrl,`${bookmark.id}`))
                 .json(serializeBookmark(bookmark))
             })
             .then(logger.info(`Bookmark was created`))
@@ -90,7 +91,7 @@ bookmarksRouter
     })
 
 bookmarksRouter
-    .route('/bookmarks/:id')
+    .route('/:id')
     .all((req,res,next) => {
         BookmarksService.getById(
             req.app.get('db'),
@@ -119,6 +120,28 @@ bookmarksRouter
         )
         .then(() => {
             logger.info(`Bookmark with id ${req.params.id} deleted`)
+            res.status(204).end()
+        })
+        .catch(next)
+    })
+    .patch(bodyParser, (req, res, next) => {
+        const {title, url, description, rating } = req.body
+        const bookmarkToUpdate = {title, url, description, rating }
+
+        const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean).length
+        if(numberOfValues === 0){
+            return res.status(400).json({
+                error: {
+                    message: `Request body must contain either 'title', 'url', 'description', or 'rating'`
+                }
+            })
+        };
+        BookmarksService.updateBookmark(
+            req.app.get('db'),
+            req.params.id,
+            bookmarkToUpdate
+        )
+        .then(numRowsAffected => {
             res.status(204).end()
         })
         .catch(next)
